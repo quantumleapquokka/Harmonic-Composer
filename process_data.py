@@ -37,7 +37,7 @@ def parse_genres_dataset(audio_path: Path, midi_path: Path):
         return None
 
     for audio_file in tqdm(audio_files, desc="Transcribing Audio"):
-        try:
+        #try:
             # Create a corresponding output path for the MIDI file
             relative_path = audio_file.relative_to(audio_path)
             output_file_path = midi_path / relative_path.with_suffix('.mid')
@@ -52,8 +52,8 @@ def parse_genres_dataset(audio_path: Path, midi_path: Path):
             model_output, midi_data, note_events = predict(str(audio_file))
             midi_data.write(str(output_file_path))
 
-        except Exception as e:
-            print(f"\nCould not process {audio_file.name}. Error: {e}")
+        #except Exception as e:
+        #    print(f"\nCould not process {audio_file.name}. Error: {e}")
     print("✅ Transcription complete!")
 
     # --- STAGE 2: MIDI PARSING ---
@@ -100,10 +100,11 @@ def prepare_sequences_for_training(notes, sequence_length):
 
     network_input, network_output = [], []
     for i in tqdm(range(len(notes) - sequence_length), desc="Creating sequences"):
-        sequence_in = notes[i:i + sequence_length]
-        sequence_out = notes[i + sequence_length]
+        # --- This is the NEW, CORRECTED code ---
+        sequence_in = notes[i : i + sequence_length]
+        sequence_out = notes[i + 1 : i + sequence_length + 1] # Get the "next note" for each note in the input
         network_input.append([note_to_int[char] for char in sequence_in])
-        network_output.append(note_to_int[sequence_out])
+        network_output.append([note_to_int[char] for char in sequence_out])
 
     n_patterns = len(network_input)
     network_input = np.reshape(network_input, (n_patterns, sequence_length))
