@@ -16,7 +16,7 @@ OUTPUT_MIDI_PATH = Path(__file__).parent / 'output/ai_transformer_composition.mi
 
 # --- Transformer Model Parameters ---
 VOCAB_SIZE = None 
-MAX_LEN = 100 
+MAX_LEN = 100
 EMBED_DIM = 256
 NUM_HEADS = 8
 FF_DIM = 512
@@ -171,7 +171,7 @@ if __name__ == '__main__':
 
     # --- UNCOMMENT THE TRAINING CALL ---
     checkpoint = ModelCheckpoint(filepath=str(MODEL_CHECKPOINT_PATH), save_weights_only=True, save_best_only=True, monitor='loss', verbose=1)
-    transformer.fit([X_chords, X_melody], y, epochs=100, batch_size=32, callbacks=[checkpoint])
+    transformer.fit([X_chords, X_melody], y, epochs=10, batch_size=32, callbacks=[checkpoint])
 
     # --- UNCOMMENT THE GENERATION CALL (after training) ---
     user_chords = ["<classical>", "Cmajor", "Gmajor", "Aminor", "Fmajor"] 
