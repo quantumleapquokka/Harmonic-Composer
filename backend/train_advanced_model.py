@@ -12,7 +12,7 @@ from music21 import instrument, note, chord, stream
 # --- Configuration ---
 PROCESSED_DATA_PATH = Path(__file__).parent / 'processed_data'
 MODEL_CHECKPOINT_PATH = Path(__file__).parent / 'model_advanced_weights/weights-best.hdf5'
-OUTPUT_MIDI_PATH = Path(__file__).parent / 'output/ai_transformer_composition.mid'
+OUTPUT_MIDI_PATH = Path(__file__).parent.parent / 'output' / 'ai_transformer_composition.mid'
 
 # --- Transformer Model Parameters ---
 VOCAB_SIZE = None 
