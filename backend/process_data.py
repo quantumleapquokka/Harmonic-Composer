@@ -7,6 +7,10 @@ from pathlib import Path
 from music21 import converter, note, chord, interval, pitch
 from tqdm import tqdm
 from tensorflow.keras.utils import to_categorical
+from chord_tools import normalize_chord
+from tokenizer import build_vocab, save_vocab, encode
+import re
+
 
 # NEW: Import the transcription library
 from basic_pitch.inference import predict
@@ -37,7 +41,7 @@ def parse_genres_dataset(audio_path: Path, midi_path: Path):
         return None
 
     for audio_file in tqdm(audio_files, desc="Transcribing Audio"):
-        #try:
+        try:
             # Create a corresponding output path for the MIDI file
             relative_path = audio_file.relative_to(audio_path)
             output_file_path = midi_path / relative_path.with_suffix('.mid')
@@ -52,8 +56,8 @@ def parse_genres_dataset(audio_path: Path, midi_path: Path):
             model_output, midi_data, note_events = predict(str(audio_file))
             midi_data.write(str(output_file_path))
 
-        #except Exception as e:
-        #    print(f"\nCould not process {audio_file.name}. Error: {e}")
+        except Exception as e:
+            print(f"\nCould not process {audio_file.name}. Error: {e}")
     print("✅ Transcription complete!")
 
     # --- STAGE 2: MIDI PARSING ---
@@ -91,29 +95,97 @@ def parse_genres_dataset(audio_path: Path, midi_path: Path):
     return all_notes
 
 def prepare_sequences_for_training(notes, sequence_length):
-    """Creates and saves training sequences from the parsed notes."""
-    pitchnames = sorted(list(set(notes)))
-    note_to_int = {note: number for number, note in enumerate(pitchnames)}
-    
-    with open(PROCESSED_DATA_PATH / 'vocab_map.json', 'w') as f:
-        json.dump(note_to_int, f)
+    """Creates and saves training sequences from the parsed notes, plus chord conditioning."""
 
+    # ---- 0) Force-include a tiny, universal chord set (12 major + 12 minor)
+    roots = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"]
+    basic_chords = [normalize_chord(r + "maj") for r in roots] + \
+                   [normalize_chord(r + "min") for r in roots]
+
+    # ---- 1) Build deterministic vocab with specials; include chord tokens
+    vocab = build_vocab([notes], min_freq=1, add_specials=True, extra_tokens=basic_chords)
+    save_vocab(PROCESSED_DATA_PATH / "vocab_map.json", vocab)
+    note_to_int = vocab.token_to_id
+
+    # ---- 2) Create melody input/output (teacher-forced shift by 1)
     network_input, network_output = [], []
     for i in tqdm(range(len(notes) - sequence_length), desc="Creating sequences"):
-        # --- This is the NEW, CORRECTED code ---
-        sequence_in = notes[i : i + sequence_length]
-        sequence_out = notes[i + 1 : i + sequence_length + 1] # Get the "next note" for each note in the input
-        network_input.append([note_to_int[char] for char in sequence_in])
-        network_output.append([note_to_int[char] for char in sequence_out])
+        seq_in  = notes[i : i + sequence_length]
+        seq_out = notes[i + 1 : i + sequence_length + 1]
+        network_input.append([note_to_int[t] for t in seq_in])
+        network_output.append([note_to_int[t] for t in seq_out])
 
+    # ---- 3) Infer a simple chord per window and build X_chords (repeat across the window)
+    # Heuristic: pick major/minor whose triad pcs best match the window's pitch-class histogram.
+    # This keeps alignment trivial (same length as seq_in).
+    note_re = re.compile(r"^[A-Ga-g][#b]?\d+$")  # e.g., C4, F#3
+    pc_map  = {"C":0,"C#":1,"D":2,"D#":3,"E":4,"F":5,"F#":6,"G":7,"G#":8,"A":9,"A#":10,"B":11}
+    major_triad = [0,4,7]
+    minor_triad = [0,3,7]
+
+    def name_to_pc(name: str) -> int:
+        # strip octave to pitch class name, normalize flats to sharps
+        n = name[:-1].upper() if name[-1].isdigit() else name.upper()
+        n = n.replace("DB","C#").replace("EB","D#").replace("GB","F#").replace("AB","G#").replace("BB","A#")
+        return pc_map.get(n, None)
+
+    def best_chord_for_window(tok_window):
+        # collect pitch classes present in the window
+        pcs = []
+        for t in tok_window:
+            if note_re.match(t):
+                pc = name_to_pc(t)
+                if pc is not None:
+                    pcs.append(pc)
+        if not pcs:
+            return "N.C."  # no chord info; neutral conditioning
+
+        hist = [0]*12
+        for p in pcs:
+            hist[p] += 1
+
+        best_name, best_score = "N.C.", -1
+        for rname, rpc in pc_map.items():
+            # score major
+            maj_pcs = [(rpc + x) % 12 for x in major_triad]
+            score_maj = sum(hist[x] for x in maj_pcs)
+            if score_maj > best_score:
+                best_name, best_score = normalize_chord(rname + "maj"), score_maj
+            # score minor
+            min_pcs = [(rpc + x) % 12 for x in minor_triad]
+            score_min = sum(hist[x] for x in min_pcs)
+            if score_min > best_score:
+                best_name, best_score = normalize_chord(rname + "min"), score_min
+        return best_name
+
+    X_chords = []
+    for i in range(len(notes) - sequence_length):
+        seq_in_tokens = notes[i : i + sequence_length]                  # original string tokens
+        chosen_chord  = best_chord_for_window(seq_in_tokens)            # e.g., "Cmaj" / "Amin" / "N.C."
+        # ensure it's normalized and in vocab (we force-included majors/minors)
+        chosen_chord  = normalize_chord(chosen_chord)
+        # encode returns a list of ids; repeat across the sequence length
+        try:
+            chord_id = encode([chosen_chord], vocab, add_bos=False, add_eos=False, use_unk=True)[0]
+        except Exception:
+            # fallback to <unk> if something unexpected sneaks in
+            chord_id = vocab.token_to_id.get("<unk>", 0)
+        X_chords.append([chord_id] * sequence_length)
+
+    # ---- 4) Shape arrays and one-hot targets
     n_patterns = len(network_input)
     network_input = np.reshape(network_input, (n_patterns, sequence_length))
-    network_output = to_categorical(network_output, num_classes=len(pitchnames))
-    
+    from tensorflow.keras.utils import to_categorical
+    network_output = to_categorical(network_output, num_classes=vocab.size)
+
+    # ---- 5) Save arrays
     print("\n💾 Saving final processed data to disk...")
-    np.save(PROCESSED_DATA_PATH / 'sequences.npy', network_input)
-    np.save(PROCESSED_DATA_PATH / 'targets.npy', network_output)
-    print("✅ All data processing is complete!")
+    np.save(PROCESSED_DATA_PATH / "sequences.npy", network_input)
+    np.save(PROCESSED_DATA_PATH / "targets.npy", network_output)
+    np.save(PROCESSED_DATA_PATH / "X_chords.npy", np.array(X_chords, dtype=np.int32))
+    print("✅ Saved sequences.npy, targets.npy, X_chords.npy, and vocab_map.json")
+
+
 
 
 if __name__ == '__main__':

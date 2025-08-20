@@ -7,6 +7,7 @@ import tensorflow as tf
 from tensorflow.keras import layers, Model
 from pathlib import Path
 from music21 import instrument, note, chord, stream
+from chord_tools import normalize_chord, progression_to_grid
 
 # --- CONFIGURATION ---
 PROCESSED_DATA_PATH = Path(__file__).parent / 'processed_data'
@@ -122,8 +123,15 @@ def top_p_sampling(logits, p=0.9, temp=1.0):
 
 def generate_music_with_chords(model, vocab_map, int_to_note, chord_progression, start_token="<classical>", max_tokens=500):
     """Generates music conditioned on a specific chord progression."""
+    # Normalize & grid to a stable length (keeps encoder happy)
+    norm = [normalize_chord(c) for c in chord_progression]
+    grid = progression_to_grid(norm, bars=25, beats_per_bar=4, chords_per_bar=1)[:MAX_LEN]
+
+    # Map to ids with a safe <unk> fallback
+    unk = vocab_map.get("<unk>", 0)
+    chord_tokens = np.array([[vocab_map.get(c, unk) for c in grid]])
+
     print(f"🎼 Generating music for chord progression: {chord_progression}...")
-    chord_tokens = np.array([[vocab_map[c] for c in chord_progression if c in vocab_map]])
     prompt_tokens = [vocab_map.get(start_token, 0)]
     
     # --- THIS IS THE CORRECTED GENERATION LOOP ---
@@ -178,8 +186,8 @@ def save_as_midi(note_sequence, output_path):
 #====================================================================================
 if __name__ == '__main__':
     print("Loading vocabulary...")
-    with open(PROCESSED_DATA_PATH / 'vocab_map.json', 'r') as f:
-        vocab_map = json.load(f)
+    data = json.load(open(PROCESSED_DATA_PATH / 'vocab_map.json'))
+    vocab_map = data['token_to_id']
     int_to_note = {i: n for n, i in vocab_map.items()}
     VOCAB_SIZE = len(vocab_map)
 
