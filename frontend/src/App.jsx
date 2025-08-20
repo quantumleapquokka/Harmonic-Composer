@@ -69,13 +69,13 @@ function App() {
                         </label>
                         <br/>
 
-                        <label>
+                        {/* <label>
                             Era: <br/>
                             <select value={selectedInstrument} onChange={(e) => setSelectedInstrument(e.target.value)}>
                             <option value="">--Choose Era--</option>
                             <option value="2000s">2000s</option>
                             </select>
-                        </label>
+                        </label> */}
                     </div>
                 </div>
             </div>
