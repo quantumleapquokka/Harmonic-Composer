@@ -1,5 +1,5 @@
-# File: generate_music.py (Corrected Version)
-# Purpose: Loads a pre-trained Transformer model and uses it to generate music.
+# File: app.py (Final Corrected Version)
+# Purpose: A single Flask server that loads the model and handles generation requests.
 
 import numpy as np
 import json
@@ -7,11 +7,15 @@ import tensorflow as tf
 from tensorflow.keras import layers, Model
 from pathlib import Path
 from music21 import instrument, note, chord, stream
+import os
+import time
+from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS
 
 # --- CONFIGURATION ---
 PROCESSED_DATA_PATH = Path(__file__).parent / 'processed_data'
 MODEL_CHECKPOINT_PATH = Path(__file__).parent / 'model_advanced_weights/weights-best.hdf5'
-OUTPUT_MIDI_PATH = Path(__file__).parent / 'output/new_composition.mid'
+OUTPUT_DIRECTORY = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output')
 
 # --- MODEL PARAMETERS (Must match the trained model) ---
 VOCAB_SIZE = None 
@@ -26,16 +30,14 @@ GENERATION_TEMP = 1.0
 GENERATION_TOP_P = 0.9
 
 #====================================================================================
-# PART 1: REBUILD THE MODEL ARCHITECTURE (No changes here)
+# PART 1: MODEL ARCHITECTURE AND GENERATION FUNCTIONS
 #====================================================================================
 
 class TokenAndPositionEmbedding(layers.Layer):
-    """Combines token embedding with positional embedding."""
     def __init__(self, maxlen, vocab_size, embed_dim):
         super().__init__()
         self.token_emb = layers.Embedding(input_dim=vocab_size, output_dim=embed_dim)
         self.pos_emb = layers.Embedding(input_dim=maxlen, output_dim=embed_dim)
-
     def call(self, x):
         maxlen = tf.shape(x)[-1]
         positions = tf.range(start=0, limit=maxlen, delta=1)
@@ -44,7 +46,6 @@ class TokenAndPositionEmbedding(layers.Layer):
         return x + positions
 
 class TransformerEncoderBlock(layers.Layer):
-    """A single block of the Transformer Encoder."""
     def __init__(self, embed_dim, num_heads, ff_dim, rate=0.1):
         super().__init__()
         self.att = layers.MultiHeadAttention(num_heads=num_heads, key_dim=embed_dim)
@@ -53,7 +54,6 @@ class TransformerEncoderBlock(layers.Layer):
         self.layernorm2 = layers.LayerNormalization(epsilon=1e-6)
         self.dropout1 = layers.Dropout(rate)
         self.dropout2 = layers.Dropout(rate)
-
     def call(self, inputs, training=False):
         attn_output = self.att(inputs, inputs)
         attn_output = self.dropout1(attn_output, training=training)
@@ -63,7 +63,6 @@ class TransformerEncoderBlock(layers.Layer):
         return self.layernorm2(out1 + ffn_output)
 
 class TransformerDecoderBlock(layers.Layer):
-    """A single block of the Transformer Decoder with cross-attention."""
     def __init__(self, embed_dim, num_heads, ff_dim, rate=0.1):
         super().__init__()
         self.self_att = layers.MultiHeadAttention(num_heads=num_heads, key_dim=embed_dim)
@@ -75,7 +74,6 @@ class TransformerDecoderBlock(layers.Layer):
         self.dropout1 = layers.Dropout(rate)
         self.dropout2 = layers.Dropout(rate)
         self.dropout3 = layers.Dropout(rate)
-
     def call(self, inputs, encoder_outputs, training=False):
         self_attn_output = self.self_att(inputs, inputs, use_causal_mask=True)
         self_attn_output = self.dropout1(self_attn_output, training=training)
@@ -88,7 +86,6 @@ class TransformerDecoderBlock(layers.Layer):
         return self.layernorm3(out2 + ffn_output)
 
 def create_conditional_transformer():
-    """Builds the full Encoder-Decoder Transformer model."""
     chord_inputs = layers.Input(shape=(None,), name="chord_inputs")
     melody_inputs = layers.Input(shape=(MAX_LEN,), name="melody_inputs")
     embedding_layer = TokenAndPositionEmbedding(MAX_LEN, VOCAB_SIZE, EMBED_DIM)
@@ -102,12 +99,7 @@ def create_conditional_transformer():
     model = Model(inputs=[chord_inputs, melody_inputs], outputs=outputs)
     return model
 
-#====================================================================================
-# PART 2: MUSIC GENERATION AND SAVING FUNCTIONS (with corrected loop)
-#====================================================================================
-
 def top_p_sampling(logits, p=0.9, temp=1.0):
-    """A robust implementation of top-p (nucleus) sampling."""
     logits = logits / temp
     sorted_indices = tf.argsort(logits, direction="DESCENDING")
     sorted_logits = tf.gather(logits, sorted_indices, batch_dims=1)
@@ -121,38 +113,19 @@ def top_p_sampling(logits, p=0.9, temp=1.0):
     return final_index[0, 0]
 
 def generate_music_with_chords(model, vocab_map, int_to_note, chord_progression, start_token="<classical>", max_tokens=500):
-    """Generates music conditioned on a specific chord progression."""
-    print(f"🎼 Generating music for chord progression: {chord_progression}...")
     chord_tokens = np.array([[vocab_map[c] for c in chord_progression if c in vocab_map]])
     prompt_tokens = [vocab_map.get(start_token, 0)]
-    
-    # --- THIS IS THE CORRECTED GENERATION LOOP ---
-    num_tokens_generated = 0
-    while num_tokens_generated < max_tokens:
-        # 1. Truncate the prompt to the model's max length
+    for _ in range(max_tokens):
         prompt_for_model = prompt_tokens[-MAX_LEN:]
-        
-        # 2. Pad the sequence
         padded_prompt = tf.keras.preprocessing.sequence.pad_sequences([prompt_for_model], maxlen=MAX_LEN, padding='post')
-        
-        # 3. Get the model's predictions
         logits = model.predict([chord_tokens, padded_prompt], verbose=0)[0]
-        
-        # 4. We only care about the prediction for the very last token in our input sequence
         next_token_logits = logits[len(prompt_for_model) - 1]
-        
-        # 5. Sample the next token
         next_token = top_p_sampling(tf.expand_dims(next_token_logits, 0), p=GENERATION_TOP_P, temp=GENERATION_TEMP)
-        
-        # 6. Add the new token to our full sequence and continue
         prompt_tokens.append(int(next_token))
-        num_tokens_generated += 1
-    
     generated_notes = [int_to_note[i] for i in prompt_tokens]
     return generated_notes
 
 def save_as_midi(note_sequence, output_path):
-    """Saves a sequence of notes as a MIDI file."""
     output_notes = []
     offset = 0
     for item in note_sequence:
@@ -169,14 +142,25 @@ def save_as_midi(note_sequence, output_path):
             output_notes.append(new_note)
         offset += 0.5
     midi_stream = stream.Stream(output_notes)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
     midi_stream.write('midi', fp=str(output_path))
-    print(f"✅ Composition complete! Saved to '{output_path}'")
+
 
 #====================================================================================
-# PART 3: MAIN EXECUTION BLOCK (No changes here)
+# PART 2: FLASK SERVER SETUP AND GLOBAL MODEL LOADING
 #====================================================================================
-if __name__ == '__main__':
+
+app = Flask(__name__)
+CORS(app)
+
+# --- Global variables to hold the loaded model and vocabulary ---
+loaded_model = None
+vocab_map = None
+int_to_note = None
+
+def load_model_and_vocab():
+    """Load the AI model and vocabulary into memory."""
+    global loaded_model, vocab_map, int_to_note, VOCAB_SIZE
+    
     print("Loading vocabulary...")
     with open(PROCESSED_DATA_PATH / 'vocab_map.json', 'r') as f:
         vocab_map = json.load(f)
@@ -184,14 +168,45 @@ if __name__ == '__main__':
     VOCAB_SIZE = len(vocab_map)
 
     print("Rebuilding model architecture...")
-    model = create_conditional_transformer()
+    loaded_model = create_conditional_transformer()
 
     print(f"Loading trained weights from {MODEL_CHECKPOINT_PATH}...")
-    model.load_weights(str(MODEL_CHECKPOINT_PATH))
+    loaded_model.load_weights(str(MODEL_CHECKPOINT_PATH))
+    print("✅ Model loaded successfully and is ready to generate music!")
 
-    # Define your chord progression and generate music!
-    user_chords = ["<classical>", "Cmajor", "Gmajor", "Aminor", "Fmajor"]
-    music = generate_music_with_chords(model, vocab_map, int_to_note, chord_progression=user_chords)
-    
-    if music:
-        save_as_midi(music, OUTPUT_MIDI_PATH)
+@app.route('/generate', methods=['POST'])
+def generate():
+    data = request.get_json()
+    genre = data['genre']
+    chords = data['chords']
+    genre_token = f"<{genre}>"
+    user_chords = [genre_token] + chords
+    print(f"🎼 Generating music for chord progression: {user_chords}...")
+    music_sequence = generate_music_with_chords(loaded_model, vocab_map, int_to_note, chord_progression=user_chords, start_token=genre_token)
+    timestamp = int(time.time())
+    output_filename = f"composition_{genre}_{timestamp}.mid"
+    output_path = os.path.join(OUTPUT_DIRECTORY, output_filename)
+    save_as_midi(music_sequence, output_path)
+    print(f"Music saved to {output_path}")
+    download_url = f"/download/{output_filename}"
+    return jsonify({'message': 'Music generated successfully!', 'download_url': download_url})
+
+@app.route('/download/<filename>')
+def download_file(filename):
+    try:
+        file_path = os.path.join(OUTPUT_DIRECTORY, filename)
+        if not os.path.exists(file_path):
+            return jsonify({'error': 'File not found on server.'}), 404
+        return send_file(file_path, as_attachment=True)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return jsonify({'error': 'An internal error occurred.'}), 500
+
+# --- THIS IS THE CORRECTED STRUCTURE ---
+# Load the model and vocab ONCE when the server process starts.
+load_model_and_vocab()
+os.makedirs(OUTPUT_DIRECTORY, exist_ok=True)
+
+if __name__ == '__main__':
+    # The app.run call is all that's needed here when running directly
+    app.run(debug=True)
