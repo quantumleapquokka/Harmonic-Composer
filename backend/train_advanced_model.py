@@ -13,7 +13,7 @@ from music21 import instrument, note, chord, stream
 from generate_music import top_p_sampling, save_as_midi  # CHANGED/ADDED
 
 # ADDED: correct module name and the specific helpers we actually use
-from chord_tools import normalize_chord, progression_to_grid  # CHANGED/ADDED
+from chords_tools import normalize_chord, progression_to_grid  # CHANGED/ADDED
 
 # --- Configuration ---
 PROCESSED_DATA_PATH = Path(__file__).parent / 'processed_data'
@@ -215,3 +215,4 @@ if __name__ == '__main__':
     music = generate_music_with_chords(transformer, vocab_map, int_to_note, chord_progression=user_chords)
     if music:
         save_as_midi(music, OUTPUT_MIDI_PATH)
+
