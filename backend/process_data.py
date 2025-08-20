@@ -7,7 +7,7 @@ from pathlib import Path
 from music21 import converter, note, chord, interval, pitch
 from tqdm import tqdm
 from tensorflow.keras.utils import to_categorical
-from chord_tools import normalize_chord
+from chords_tools import normalize_chord
 from tokenizer import build_vocab, save_vocab, encode
 import re
 
