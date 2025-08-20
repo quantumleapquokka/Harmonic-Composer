@@ -7,7 +7,7 @@ import tensorflow as tf
 from tensorflow.keras import layers, Model
 from pathlib import Path
 from music21 import instrument, note, chord, stream
-from chord_tools import normalize_chord, progression_to_grid
+from chords_tools import normalize_chord, progression_to_grid
 
 # --- CONFIGURATION ---
 PROCESSED_DATA_PATH = Path(__file__).parent / 'processed_data'
