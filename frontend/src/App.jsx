@@ -15,6 +15,7 @@ function App() {
     const [isLoading, setIsLoading] = useState(false)
     const [xmlString, setXmlString] = useState(null)
     const [overviewXml, setOverviewXml] = useState(null)
+    const [canRefine, setCanRefine] = useState(false)
 
     const handleGenerateMusic = async () => {
         setIsLoading(true)
@@ -52,6 +53,7 @@ function App() {
             const xmlResp = await fetch(`http://127.0.0.1:5000${result.xml_url}`)
             const xmlText = await xmlResp.text()
             setXmlString(xmlText)
+            setCanRefine(true)
         } else {
             setStatus(`Error: ${result.error || 'An unknown error occurred.'}`)
         }
@@ -77,8 +79,7 @@ function App() {
         };
 
             fetchLatestOverview();
-    }, []);
-
+    }, [])
 
     return (
         <>
@@ -162,13 +163,15 @@ function App() {
                                 />
                             </label>
                         </div>
-
-                            <div className="iteration-controls">
-                                <button>Regenerate Entirely</button>
-                                <button>Keep Rhythm, Change Melody</button>
-                                <button>Keep Melody, Change Instrumentation</button>
-                                <button>Keep Everything, Just Refine</button>
-                            </div>
+                        
+                        <h2> Refine Composition</h2>
+                        <p> (Available after generation of composition)</p>
+                        <div className="iteration-controls">
+                            {/*NOTE: WHEN BUTTONS ACTUALLY IMPLEMENTED REPLACE alert(asdasdf) WITH ACTUAL LOGIC*/}
+                            <button disabled={!canRefine} title={!xmlString ? "Generate music first" : ""} onClick={() => alert("Feature in progress: Regenerate Entirely")}>Regenerate Entirely</button>
+                            <button disabled={!canRefine} title={!xmlString ? "Generate music first" : ""} onClick={() => alert("Feature in progress: Keep Rhythm, Change Melody")}>Keep Rhythm, Change Melody</button>
+                            <button disabled={!canRefine} title={!xmlString ? "Generate music first" : ""} onClick={() => alert("Feature in progress: Keep Melody, Change Instrument")}>Keep Melody, Change Instrumentation</button>
+                        </div>
 
                     </div>
                 </div>
