@@ -27,7 +27,7 @@ function Header() {
 
                 <ul className={`nav-links ${menuOpen ? "show" : ""}`}>
                     <li><a href="#overview">Overview</a></li>
-                    <li><a>Settings</a></li>
+                    <li><a href="#generation">Generate Music</a></li>
                     <li><a href="#about">About/Team</a></li>
                 </ul>
             </nav>

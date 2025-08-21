@@ -3,14 +3,16 @@
 
 import numpy as np
 import json
+import glob
+import shutil
 import tensorflow as tf
 from tensorflow.keras import layers, Model
 from pathlib import Path
 from music21 import instrument, note, chord, stream
-import os
-import time
+import os, time
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
+from midi_to_musicalxml import render_all_versions
 
 # --- CONFIGURATION ---
 PROCESSED_DATA_PATH = Path(__file__).parent / 'processed_data'
@@ -176,20 +178,65 @@ def load_model_and_vocab():
 
 @app.route('/generate', methods=['POST'])
 def generate():
+    # data = request.get_json()
+    # genre = data['genre']
+    # chords = data['chords']
+    # genre_token = f"<{genre}>"
+    # user_chords = [genre_token] + chords
+    # print(f"Generating music for chord progression: {user_chords}...")
+    # music_sequence = generate_music_with_chords(loaded_model, vocab_map, int_to_note, chord_progression=user_chords, start_token=genre_token)
+    # timestamp = int(time.time())
+    # output_filename = f"composition_{genre}_{timestamp}.mid"
+    # output_path = os.path.join(OUTPUT_DIRECTORY, output_filename)
+    # save_as_midi(music_sequence, output_path)
+    # print(f"Music saved to {output_path}")
+    # download_url = f"/download/{output_filename}"
+    # return jsonify({'message': 'Music generated successfully!', 'download_url': download_url})
     data = request.get_json()
     genre = data['genre']
     chords = data['chords']
+    instrument_choice = data.get('instrument', 'piano')  # piano or guitar
+
     genre_token = f"<{genre}>"
     user_chords = [genre_token] + chords
-    print(f"🎼 Generating music for chord progression: {user_chords}...")
-    music_sequence = generate_music_with_chords(loaded_model, vocab_map, int_to_note, chord_progression=user_chords, start_token=genre_token)
+    print(f"Generating music for chord progression: {user_chords}...")
+
+    # Step 1: Generate base MIDI
+    music_sequence = generate_music_with_chords(
+        loaded_model, vocab_map, int_to_note,
+        chord_progression=user_chords, start_token=genre_token
+    )
     timestamp = int(time.time())
-    output_filename = f"composition_{genre}_{timestamp}.mid"
-    output_path = os.path.join(OUTPUT_DIRECTORY, output_filename)
-    save_as_midi(music_sequence, output_path)
-    print(f"Music saved to {output_path}")
-    download_url = f"/download/{output_filename}"
-    return jsonify({'message': 'Music generated successfully!', 'download_url': download_url})
+    base_filename = f"composition_{genre}_{timestamp}"
+    midi_filename = f"{base_filename}.mid"
+    midi_path = os.path.join(OUTPUT_DIRECTORY, midi_filename)
+    save_as_midi(music_sequence, midi_path)
+    print(f"Music saved to {midi_path}")
+
+    # Step 2: Convert to MusicXML + MIDI for both piano & guitar
+    render_all_versions(midi_path, out_dir=OUTPUT_DIRECTORY, basename=base_filename)
+    import shutil
+
+    # copy the chosen XML to frontend/public/latest.xml
+    frontend_latest_path = os.path.join('../frontend/public', f'latest_{instrument_choice}.musicxml')
+    shutil.copy(os.path.join(OUTPUT_DIRECTORY, xml_file), frontend_latest_path)
+
+    # Step 3: Choose instrument-specific files to return
+    if instrument_choice == "guitar":
+        xml_file = f"{base_filename}_guitar.musicxml"
+        midi_file = f"{base_filename}_guitar.mid"
+    else:  # default to piano
+        xml_file = f"{base_filename}_piano.musicxml"
+        midi_file = f"{base_filename}_piano.mid"
+
+    xml_url = f"/download/{xml_file}"
+    midi_url = f"/download/{midi_file}"
+
+    return jsonify({
+        'message': 'Music generated successfully!',
+        'xml_url': xml_url,
+        'midi_url': midi_url
+    })
 
 @app.route('/download/<filename>')
 def download_file(filename):
@@ -202,7 +249,22 @@ def download_file(filename):
         print(f"An error occurred: {e}")
         return jsonify({'error': 'An internal error occurred.'}), 500
 
-# --- THIS IS THE CORRECTED STRUCTURE ---
+# reads most recent XML file in output folder
+@app.route('/latest-xml/<instrument>')
+def latest_xml(instrument='piano'):
+    xml_files = sorted(
+        glob.glob(os.path.join(OUTPUT_DIRECTORY, f"*_{instrument}.musicxml")),
+        key=os.path.getmtime,
+        reverse=True
+    )
+    if not xml_files:
+        return jsonify({'error': 'No compositions found.'}), 404
+
+    latest_file = xml_files[0]
+    with open(latest_file, 'r', encoding='utf-8') as f:
+        xml_content = f.read()
+    return xml_content
+
 # Load the model and vocab ONCE when the server process starts.
 load_model_and_vocab()
 os.makedirs(OUTPUT_DIRECTORY, exist_ok=True)

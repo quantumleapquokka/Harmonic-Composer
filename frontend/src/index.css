@@ -154,16 +154,37 @@ section.section {
 .sheet-container {
   width: 100%;
   max-width: 1275px;
-  height: 1650px;
+  height: 1750px;
   border: 2px solid #1B263B;
-  border-radius: 0.5rem;
   background: #fff;
+  display: flex;
   justify-content: center;
+  align-items: center;
+
+  overflow: auto;
+  padding: 2rem; 
+  box-sizing: border-box;
+  align-items: flex-start; 
 }
+
+.sheet-container svg {
+  display: block;
+  width: 100% !important;  /* force OSMD SVG to use container width */
+  height: auto !important;
+  fill: black !important;
+  stroke: black !important;
+}
+
+
+/* Target the OSMD container */
+.sheet-container > div {
+  overflow: visible !important;
+}
+
 
 /*Settings*/
 .settings-section {
-  display: grid;
+  /* display: grid; */
   grid-template-columns: 1fr 1fr;
   gap: 2rem;
   align-items: start;
@@ -225,6 +246,23 @@ button:active {
 
 .generate-wrapper{
     justify-content: center;
+}
+
+.iteration-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #e4e8f0;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.iteration-controls h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+  color: #1b263b;
 }
 
 /*page formatting*/
