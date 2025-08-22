@@ -172,7 +172,7 @@ function App() {
                         </div>
                         
                         <h2> Refine Composition</h2>
-                        <p> (Available after generation of composition)</p>
+                        <p> (Available after initial generation of composition)</p>
                         <div className="iteration-controls">
                             {/*NOTE: WHEN BUTTONS ACTUALLY IMPLEMENTED REPLACE alert(asdasdf) WITH ACTUAL LOGIC*/}
                             <button disabled={!canRefine} title={!xmlString ? "Generate music first" : ""} onClick={() => alert("Feature in progress: Regenerate Entirely")}>Regenerate Entirely</button>
@@ -189,7 +189,17 @@ function App() {
 
             <section id="about" className="section">
             <h2>About / Team</h2>
-            <p>CMPM 146 Final Project<br/>AI takes on the role of a collaborative composer, generating, revising, and finalizing music in conjunction with the user.<br/>Brandon Hernandez, Samantha Siew, Shripad Mangavalli, Grishen Hestiyas</p>
+            <p>CMPM 146 Final Project
+                <br/>Brandon Hernandez, Samantha Siew, Shripad Mangavalli, Grishen Hestiyas
+                <br/>
+                <br/> Technologies: React, Flask, Generative AI trained on data, Python 
+                <br/>
+                <br/>AI takes on the role of a collaborative composer, generating, revising, and finalizing music in conjunction with the user.
+                <br/> Harmonic composer is an AI-powered music composition tool that allows users to generate original sheet music tailored to a chosen era/genre (e.g. Classical, Pop, Country, Jazz, Blues). 
+                    The AI produces playable scores for both guitar and piano in a machine-readable MusicXML format. The prototype will display the AI-generated sheet music directly in the web app, 
+                    allowing users to view and interact with the score in real time without needing external notation software.
+           </p>
+                
             </section>
         </main>
         </>
