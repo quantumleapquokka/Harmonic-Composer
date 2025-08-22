@@ -197,7 +197,7 @@ section.section {
   gap: 1.5rem;
   padding: 1rem;
   background: #8EA0B8;
-  border-radius: 8px;
+  border-radius: 0.5rem;
   box-shadow: 0 2px 6px rgba(0,0,0,0.1);
   width: 100%;
   box-sizing: border-box;
@@ -211,17 +211,30 @@ section.section {
 .settings-container select {
   margin-top: 0.5rem;
   padding: 0.5rem;
-  border: 1px solid #ccc;
-  border-radius: 6px;
+  border: 1px solid #772222;
+  border-radius: 0.5rem;
   font-size: 1rem;
   width: 100%;
-  background-color: rgb(0, 0, 0);
+  background-color: rgb(255, 255, 255);
+  color: #1B263B;
 }
 
 .settings-container select:focus {
   outline: none;
   border-color: #6182a8;
   box-shadow: 0 0 4px rgba(97,130,168,0.6);
+}
+
+.settings-container input {
+    background-color: #fff;
+    border-radius: 0.5rem;
+    width: 100%;
+    font-size: 1rem;
+    color: #1B263B;
+    margin-top: 0.5rem;
+    padding-bottom: 0.75rem;
+    border: 1px solid #772222;
+    align-self: center;
 }
 
 /*buttons*/
@@ -260,7 +273,7 @@ button:disabled {
   margin-top: 1rem;
   padding: 1rem;
   background: #e4e8f0;
-  border-radius: 8px;
+  border-radius: 0.5rem;
   box-shadow: 0 2px 6px rgba(0,0,0,0.1);
 }
 

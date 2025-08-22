@@ -6,7 +6,6 @@ function SheetViewer({ xml }) {
     const osmdRef = useRef(null)  
 
     useEffect(() => {
-        console.log("SheetViewr XML:", xml)
         if (!xml && !xmlUrl) return  
 
         if (!osmdRef.current) {

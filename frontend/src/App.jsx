@@ -156,12 +156,19 @@ function App() {
                             <label>
                                 Chord Progression: <br/>
                                 <input 
-                                type="text" 
-                                value={chords} 
-                                onChange={(e) => setChords(e.target.value)} 
-                                placeholder="e.g. Cmajor Gmajor Aminor"
+                                    type="text" 
+                                    value={chords} 
+                                    onChange={(e) => setChords(e.target.value)} 
+                                    placeholder="e.g. Cmajor Gmajor Aminor"
                                 />
                             </label>
+                        </div>
+
+                        <br/>
+                        <div className="generate-wrapper">
+                            <button className="button" onClick={handleGenerateMusic} disabled={isLoading}>
+                            {isLoading ? 'Composing...' : 'Generate Music'}
+                            </button>
                         </div>
                         
                         <h2> Refine Composition</h2>
@@ -174,13 +181,10 @@ function App() {
                         </div>
 
                     </div>
+                
+                
                 </div>
 
-                <div className="generate-wrapper">
-                    <button className="button" onClick={handleGenerateMusic} disabled={isLoading}>
-                    {isLoading ? 'Composing...' : 'Generate Music'}
-                    </button>
-                </div>
             </section>
 
             <section id="about" className="section">
